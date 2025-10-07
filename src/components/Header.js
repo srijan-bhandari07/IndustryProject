@@ -1,4 +1,3 @@
-// src/components/Header.js
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAdminStore } from '../context/AdminStore';
@@ -13,8 +12,9 @@ const Header = ({ onToggleSidebar }) => {
     currentUser,
     users, addUser, updateUser, deleteUser,
     logout,
+    productionLines,       // ✅ need this for machine list
+    toggleMachineAccess,   // ✅ grant/revoke machine access
   } = useAdminStore();
-  
 
   const [showUserMgr, setShowUserMgr] = useState(false);
   const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'operator' });
@@ -45,7 +45,7 @@ const Header = ({ onToggleSidebar }) => {
 
       <div className="user-info" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 10 }}>
         
-        {/* Admin toggle (not shown if user is not admin) */}
+        {/* Admin toggle */}
         {isAdmin && (
           <button
             className="btn small"
@@ -64,7 +64,7 @@ const Header = ({ onToggleSidebar }) => {
           </button>
         )}
 
-        {/* Manage Users (only if admin + adminMode) */}
+        {/* Manage Users */}
         {isAdmin && adminMode && (
           <button className="btn small" onClick={() => setShowUserMgr(s => !s)}>
             <i className="fas fa-users-cog" /> Manage Users
@@ -81,11 +81,12 @@ const Header = ({ onToggleSidebar }) => {
           </button>
         )}
 
-        {/* User manager popover */}
+        {/* User Manager Popover */}
         {isAdmin && adminMode && showUserMgr && (
-          <div className="admin-popover" style={{ width: 320 }}>
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>Users & Roles</div>
+          <div className="admin-popover" style={{ width: 360 }}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>Users & Access</div>
 
+            {/* Create New User */}
             <div className="row" style={{ display:'grid', gap:6, marginBottom: 10 }}>
               <input placeholder="Full name" value={newUser.name} onChange={e => setNewUser({ ...newUser, name: e.target.value })}/>
               <input placeholder="Email" value={newUser.email} onChange={e => setNewUser({ ...newUser, email: e.target.value })}/>
@@ -100,9 +101,19 @@ const Header = ({ onToggleSidebar }) => {
               </button>
             </div>
 
-            <div style={{ maxHeight: 220, overflow: 'auto', display:'grid', gap:8 }}>
+            {/* Existing Users */}
+            <div style={{ maxHeight: 320, overflow: 'auto', display:'grid', gap:8 }}>
               {users.map(u => (
-                <div key={u.id} style={{ display:'grid', gap:6, padding:8, background:'rgba(52,152,219,0.08)', borderRadius:8 }}>
+                <div
+                  key={u.id}
+                  style={{
+                    display:'grid',
+                    gap:6,
+                    padding:8,
+                    background:'rgba(52,152,219,0.08)',
+                    borderRadius:8
+                  }}
+                >
                   <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
                     <strong>{u.name}</strong>
                     <button className="btn small" onClick={() => deleteUser(u.id)}>
@@ -129,6 +140,37 @@ const Header = ({ onToggleSidebar }) => {
                       />
                       Active
                     </label>
+                  </div>
+
+                  {/* ✅ Machine Access Buttons */}
+                  <div style={{ fontSize:'.85rem', marginTop:4 }}>
+                    <strong>Machine Access:</strong>
+                    <div style={{
+                      display:'flex',
+                      flexWrap:'wrap',
+                      gap:6,
+                      marginTop:4
+                    }}>
+                      {productionLines.flatMap(line =>
+                        line.machines.map(machine => {
+                          const hasAccess = (u.accessibleMachines || []).includes(machine.id);
+                          return (
+                            <button
+                              key={machine.id}
+                              className="btn small"
+                              style={{
+                                background: hasAccess ? 'var(--accent)' : 'var(--secondary)',
+                                opacity: hasAccess ? 1 : 0.6,
+                                fontSize: '.8rem',
+                              }}
+                              onClick={() => toggleMachineAccess(u.id, machine.id)}
+                            >
+                              {machine.name}
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}

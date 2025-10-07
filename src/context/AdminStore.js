@@ -36,7 +36,7 @@ const DEFAULT_LINES = [
   },
 ];
 
-/* Seed admin */
+/* ---------- Seeded Admin ---------- */
 const SEEDED_ADMIN = {
   id: 1,
   name: "Admin",
@@ -44,18 +44,15 @@ const SEEDED_ADMIN = {
   password: "admin",
   role: "admin",
   active: true,
+  accessibleMachines: [], // admin has implicit access to all
 };
 
 /* ---------- Provider ---------- */
 export function AdminProvider({ children }) {
   const [adminMode, setAdminMode] = useState(load("admin.mode", false));
   const [users, setUsers] = useState(load("admin.users", [SEEDED_ADMIN]));
-  const [productionLines, setProductionLines] = useState(
-    load("admin.lines", DEFAULT_LINES)
-  );
-  const [currentUser, setCurrentUser] = useState(
-    load("auth.currentUser", null)
-  ); // {id,name,email,role}
+  const [productionLines, setProductionLines] = useState(load("admin.lines", DEFAULT_LINES));
+  const [currentUser, setCurrentUser] = useState(load("auth.currentUser", null));
 
   /* Ensure at least one admin exists */
   useEffect(() => {
@@ -70,7 +67,7 @@ export function AdminProvider({ children }) {
     });
   }, []);
 
-  /* Persist */
+  /* Persist state */
   useEffect(() => save("admin.mode", adminMode), [adminMode]);
   useEffect(() => save("admin.users", users), [users]);
   useEffect(() => save("admin.lines", productionLines), [productionLines]);
@@ -80,14 +77,17 @@ export function AdminProvider({ children }) {
   const login = (email, password) => {
     const e = (email || "").trim().toLowerCase();
     const p = (password || "").trim();
-    const user = users.find(
-      (u) => u.email.toLowerCase() === e && u.password === p
-    );
+    const user = users.find((u) => u.email.toLowerCase() === e && u.password === p);
     if (!user) return { ok: false, error: "Invalid email or password." };
-    if (user.active === false)
-      return { ok: false, error: "Account is deactivated." };
+    if (user.active === false) return { ok: false, error: "Account is deactivated." };
 
-    const authUser = { id: user.id, name: user.name, email: user.email, role: user.role };
+    const authUser = {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      accessibleMachines: user.accessibleMachines || [],
+    };
     setCurrentUser(authUser);
     setAdminMode(user.role === "admin");
     return { ok: true, user: authUser };
@@ -96,25 +96,63 @@ export function AdminProvider({ children }) {
   const logout = () => {
     setCurrentUser(null);
     setAdminMode(false);
-    localStorage.removeItem("auth.currentUser"); // clear session
+    localStorage.removeItem("auth.currentUser");
   };
 
   /* ---------- Users ---------- */
   const addUser = (u) => {
     const id = Date.now();
     const email = (u.email || "").trim().toLowerCase();
-    const user = { id, active: true, role: u.role || "operator", ...u, email };
+    const user = {
+      id,
+      active: true,
+      role: u.role || "operator",
+      accessibleMachines: [],
+      ...u,
+      email,
+    };
     setUsers((prev) => [...prev, user]);
     return user;
   };
 
-  const updateUser = (id, patch) =>
-    setUsers((prev) =>
-      prev.map((u) => (u.id === id ? { ...u, ...patch } : u))
-    );
+  // ✅ Keeps currentUser synced when updating role, active state, etc.
+  const updateUser = (id, patch) => {
+    setUsers((prev) => {
+      const next = prev.map((u) => (u.id === id ? { ...u, ...patch } : u));
+      if (currentUser?.id === id) {
+        setCurrentUser((cu) => ({ ...cu, ...patch }));
+      }
+      return next;
+    });
+  };
 
-  const deleteUser = (id) =>
+  const deleteUser = (id) => {
     setUsers((prev) => prev.filter((u) => u.id !== id));
+  };
+
+  // ✅ Syncs immediately with currentUser if you change their access
+  const toggleMachineAccess = (userId, machineId) => {
+    setUsers((prev) => {
+      const next = prev.map((u) => {
+        if (u.id !== userId) return u;
+        const list = Array.isArray(u.accessibleMachines) ? [...u.accessibleMachines] : [];
+        const has = list.includes(machineId);
+        const updated = has ? list.filter((id) => id !== machineId) : [...list, machineId];
+        return { ...u, accessibleMachines: updated };
+      });
+
+      // Mirror to logged-in user if they are the one being edited
+      if (currentUser?.id === userId) {
+        const updatedUser = next.find((u) => u.id === userId);
+        setCurrentUser((cu) => ({
+          ...cu,
+          accessibleMachines: updatedUser?.accessibleMachines || [],
+        }));
+      }
+
+      return next;
+    });
+  };
 
   /* ---------- Machines ---------- */
   const addMachine = (lineIndex, machine) => {
@@ -124,73 +162,96 @@ export function AdminProvider({ children }) {
         machines: l.machines.map((m) => ({ ...m })),
       }));
       const maxId = Math.max(0, ...copy.flatMap((l) => l.machines.map((m) => m.id)));
-      copy[lineIndex].machines.push({
+      const newMachine = {
         id: maxId + 1,
         status: machine.status || "normal",
         ...machine,
-      });
+      };
+      copy[lineIndex].machines.push(newMachine);
+
+      // New machine should be visible in Manage Users instantly
+      setUsers((prevUsers) =>
+        prevUsers.map((u) => ({
+          ...u,
+          accessibleMachines: Array.isArray(u.accessibleMachines)
+            ? u.accessibleMachines
+            : [],
+        }))
+      );
+
       return copy;
     });
   };
 
+  // ✅ Removes machine & scrubs from user access lists
   const deleteMachine = (lineIndex, machineId) => {
     setProductionLines((prev) => {
       const copy = prev.map((l) => ({
         ...l,
         machines: l.machines.map((m) => ({ ...m })),
       }));
-      copy[lineIndex].machines = copy[lineIndex].machines.filter(
-        (m) => m.id !== machineId
+      copy[lineIndex].machines = copy[lineIndex].machines.filter((m) => m.id !== machineId);
+      return copy;
+    });
+
+    setUsers((prev) => {
+      const next = prev.map((u) => ({
+        ...u,
+        accessibleMachines: (u.accessibleMachines || []).filter((id) => id !== machineId),
+      }));
+      if (currentUser) {
+        setCurrentUser((cu) => ({
+          ...cu,
+          accessibleMachines: (cu.accessibleMachines || []).filter((id) => id !== machineId),
+        }));
+      }
+      return next;
+    });
+  };
+
+  const setMachineStatus = (lineIndex, machineId, status) => {
+    setProductionLines((prev) => {
+      const copy = prev.map((l) => ({
+        ...l,
+        machines: l.machines.map((m) => ({ ...m })),
+      }));
+      copy[lineIndex].machines = copy[lineIndex].machines.map((m) =>
+        m.id === machineId ? { ...m, status } : m
       );
       return copy;
     });
   };
- // Set an explicit status for a machine
-const setMachineStatus = (lineIndex, machineId, status) => {
-  setProductionLines(prev => {
-    const copy = prev.map(l => ({
-      ...l,
-      machines: l.machines.map(m => ({ ...m }))
-    }));
-    copy[lineIndex].machines = copy[lineIndex].machines.map(m =>
-      m.id === machineId ? { ...m, status } : m
-    );
-    return copy;
-  });
-};
 
-// Toggle between normal <-> non-operational (leave 'warning' as-is unless toggled)
-const toggleMachineStatus = (lineIndex, machineId) => {
-  setProductionLines(prev => {
-    const copy = prev.map(l => ({
-      ...l,
-      machines: l.machines.map(m => ({ ...m }))
-    }));
-
-    copy[lineIndex].machines = copy[lineIndex].machines.map(m => {
-      if (m.id !== machineId) return m;
-      const next =
-        m.status === 'non-operational' ? 'normal'
-        : m.status === 'warning'    ? 'non-operational' // optional: warning -> down
-        : 'non-operational';
-      return { ...m, status: next };
+  const toggleMachineStatus = (lineIndex, machineId) => {
+    setProductionLines((prev) => {
+      const copy = prev.map((l) => ({
+        ...l,
+        machines: l.machines.map((m) => ({ ...m })),
+      }));
+      copy[lineIndex].machines = copy[lineIndex].machines.map((m) => {
+        if (m.id !== machineId) return m;
+        const next =
+          m.status === "non-operational"
+            ? "normal"
+            : m.status === "warning"
+            ? "non-operational"
+            : "non-operational";
+        return { ...m, status: next };
+      });
+      return copy;
     });
+  };
 
-    return copy;
-  });
-};
-
-
-  /* Keep adminMode in sync with role — but let real admins toggle freely */
+  /* ---------- Keep adminMode in sync ---------- */
   useEffect(() => {
     if (!currentUser) {
-      setAdminMode(false); // logged out → no admin mode
+      setAdminMode(false);
     } else if (currentUser.role !== "admin" && adminMode) {
-      setAdminMode(false); // non-admin users cannot force adminMode
+      setAdminMode(false);
     }
-    // ✅ If currentUser.role === "admin", allow toggle to control it
   }, [currentUser, adminMode]);
 
+  /* ---------- Expose store ---------- */
   const value = useMemo(
     () => ({
       currentUser,
@@ -203,6 +264,7 @@ const toggleMachineStatus = (lineIndex, machineId) => {
       addUser,
       updateUser,
       deleteUser,
+      toggleMachineAccess,
       productionLines,
       setProductionLines,
       addMachine,
