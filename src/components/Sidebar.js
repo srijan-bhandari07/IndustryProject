@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+// src/components/Sidebar.jsx
+import React, { useState, useMemo } from 'react';
 import { useAdminStore } from '../context/AdminStore';
 
 const Sidebar = ({
@@ -9,14 +10,14 @@ const Sidebar = ({
   isOpen = false,
   onClose = () => {},
 }) => {
-  // Global store hooks
   const {
     productionLines,
     adminMode,
     addMachine,
     deleteMachine,
     toggleMachineStatus,
-    currentUser,          // ✅ include current user for access checks
+    currentUser,
+    maintenanceLogs,               
   } = useAdminStore();
 
   const [newNames, setNewNames] = useState({}); // { [lineIndex]: 'New machine name' }
@@ -36,10 +37,29 @@ const Sidebar = ({
     return 'normal';
   };
 
+  // Helper to resolve machine name
+  const machineNameById = useMemo(() => {
+    const map = new Map();
+    productionLines.forEach(l => (l.machines || []).forEach(m => map.set(m.id, m.name)));
+    return map;
+  }, [productionLines]);
+
+  // Sort logs by date (desc) and show top 6
+  const visibleLogs = useMemo(() => {
+    const clone = Array.isArray(maintenanceLogs) ? [...maintenanceLogs] : [];
+    clone.sort((a, b) => new Date(b.date) - new Date(a.date));
+    return clone.slice(0, 6);
+  }, [maintenanceLogs]);
+
+  const statusBadgeClass = (s) =>
+    s === 'completed' ? 'badge good'
+    : s === 'in-progress' ? 'badge warn'
+    : 'badge ghost';
+
   return (
     <aside className={`sidebar ${isOpen ? 'open' : ''}`} aria-hidden={!isOpen}>
       <div className="card-header sidebar-header">
-        <div className="card-title">Production Lines</div>
+        <div className="card-title">Machines</div>
         <button
           type="button"
           className="sidebar-close"
@@ -54,20 +74,12 @@ const Sidebar = ({
       {productionLines.map((line, lineIndex) => (
         <div key={line.id} className="production-line-section">
           <div
-            className={`production-line-header ${
-              lineIndex === activeProductionLine ? 'active' : ''
-            }`}
+            className={`production-line-header ${lineIndex === activeProductionLine ? 'active' : ''}`}
             onClick={() => setActiveProductionLine(lineIndex)}
           >
             <i className="fas fa-industry" />
             <span className="line-name">{line.name}</span>
-            <i
-              className={`fas ${
-                lineIndex === activeProductionLine
-                  ? 'fa-chevron-down'
-                  : 'fa-chevron-right'
-              }`}
-            />
+            <i className={`fas ${lineIndex === activeProductionLine ? 'fa-chevron-down' : 'fa-chevron-right'}`} />
           </div>
 
           {lineIndex === activeProductionLine && (
@@ -108,7 +120,6 @@ const Sidebar = ({
               {/* ---- MACHINE LIST ---- */}
               <ul className="machine-list">
                 {line.machines
-                  // ✅ Filter visible machines based on user access
                   .filter((machine) => {
                     if (adminMode || currentUser?.role === 'admin') return true;
                     const allowed = currentUser?.accessibleMachines || [];
@@ -134,10 +145,8 @@ const Sidebar = ({
                         <i className={`fas ${getStatusIcon(machine.status)}`} />
                         <span className="machine-name">{machine.name}</span>
 
-                        {/* ---- ADMIN CONTROLS ---- */}
                         {adminMode && (
                           <>
-                            {/* Toggle operational state */}
                             <button
                               className="btn small"
                               style={{ marginLeft: 'auto' }}
@@ -151,7 +160,6 @@ const Sidebar = ({
                               <i className="fas fa-power-off" />
                             </button>
 
-                            {/* Delete machine */}
                             <button
                               className="btn small"
                               onClick={(e) => {
@@ -166,9 +174,7 @@ const Sidebar = ({
                           </>
                         )}
 
-                        {isActive && (
-                          <i className="fas fa-chevron-right active-arrow" />
-                        )}
+                        {isActive && <i className="fas fa-chevron-right active-arrow" />}
                       </li>
                     );
                   })}
@@ -178,26 +184,34 @@ const Sidebar = ({
         </div>
       ))}
 
-      {/* ---- MAINTENANCE ---- */}
-      <div className="maintenance-section">
-        <h3>Maintenance Schedule</h3>
-        <div className="maintenance-item">
-          <div className="maintenance-date">Sep 15, 2025</div>
-          <div className="maintenance-desc">
-            Routine maintenance for Machine #A1
-          </div>
+      {/* ===== Maintenance Log (Admin only) ===== */}
+      {adminMode && (
+        <div className="maintenance-section">
+          <h3>Maintenance Log</h3>
+
+          {visibleLogs.length === 0 && (
+            <div className="maintenance-empty">No maintenance entries yet.</div>
+          )}
+
+          {visibleLogs.map((log) => (
+            <div key={log.id} className="maintenance-item">
+              <div className="maintenance-date">
+                {new Date(log.date).toLocaleDateString()}
+              </div>
+              <div className="maintenance-desc">
+                <div className="maintenance-title">{log.title || '—'}</div>
+                <div className="maintenance-meta">
+                  {machineNameById.get(log.machineId) || `Machine #${log.machineId}`}
+                  {log.technician ? ` • Tech: ${log.technician}` : ''}
+                </div>
+              </div>
+              <span className={statusBadgeClass(log.status || 'planned')}>
+                {log.status || 'planned'}
+              </span>
+            </div>
+          ))}
         </div>
-        <div className="maintenance-item">
-          <div className="maintenance-date">Sep 18, 2025</div>
-          <div className="maintenance-desc">Machine #B3 calibration</div>
-        </div>
-        <div className="maintenance-item">
-          <div className="maintenance-date">Sep 25, 2025</div>
-          <div className="maintenance-desc">
-            Machine #A2 parts replacement
-          </div>
-        </div>
-      </div>
+      )}
     </aside>
   );
 };

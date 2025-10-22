@@ -1,67 +1,76 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAdminStore } from '../context/AdminStore';
 import './auth.css';
 
 export default function Login() {
-  const { login } = useAdminStore(); // <-- use store login helper
+  const { login } = useAdminStore();
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
   const onChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-
-    const res = login(form.email, form.password);
-    if (!res.ok) {
-      setError(res.error || 'Invalid email or password.');
-      return;
-    }
-
-    const u = res.user;
-    navigate(u.role === 'admin' ? '/admin' : '/', { replace: true });
+    const { ok, error } = await login(form.email, form.password);
+    if (!ok) { setError(error || 'Sign in failed'); return; }
+    // route by role (admin → /admin, others → /)
+    navigate('/'); // or: navigate(user.role === 'admin' ? '/admin' : '/');
   };
 
   return (
-    <div className="login-wrap">
-      <div className="login-card">
-        <div className="login-brand">
-          <i className="fas fa-industry"></i>
-          <h1>AI Predictive Maintenance</h1>
+    <div className="auth-shell">
+      {/* Left: big round emblem */}
+      <div className="auth-left">
+        <div className="emblem">
+          
+          <div className="emblem-title">PMS</div>
         </div>
+      </div>
 
-        <form className="login-form" onSubmit={handleSubmit}>
-          {error && <div className="login-error">{error}</div>}
+      {/* Divider */}
+      <div className="auth-divider" aria-hidden />
 
-          <label className="login-label" htmlFor="email">Email</label>
+      {/* Right: compact sign-in */}
+      <div className="auth-right">
+        <form className="signin-card" onSubmit={handleSubmit}>
+          <h1 className="signin-title">Sign in</h1>
+
+          {error && <div className="signin-error">{error}</div>}
+
+          <label className="signin-label" htmlFor="email">Email</label>
           <input
-            id="email"
-            name="email"
-            type="email"
-            className="login-input"
-            value={form.email}
-            onChange={onChange}
+            id="email" name="email" type="email"
+            className="signin-input"
+           
+            value={form.email} onChange={onChange}
             autoComplete="username"
+            required
           />
 
-          <label className="login-label" htmlFor="password">Password</label>
+          <label className="signin-label" htmlFor="password">Password</label>
           <input
-            id="password"
-            name="password"
-            type="password"
-            className="login-input"
-            value={form.password}
-            onChange={onChange}
+            id="password" name="password" type="password"
+            className="signin-input"
+           
+            value={form.password} onChange={onChange}
             autoComplete="current-password"
+            required
           />
 
-          <button className="login-btn" type="submit">Sign in</button>
+          <div className="signin-row">
+            <button className="signin-btn" type="submit">Sign in</button>
+            <button
+              type="button"
+              className="link-btn"
+              onClick={() => alert('Ask your admin to reset your password.')}
+            >
+              forgot password
+            </button>
+          </div>
         </form>
-
-      
       </div>
     </div>
   );

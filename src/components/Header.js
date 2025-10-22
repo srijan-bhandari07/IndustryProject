@@ -1,188 +1,107 @@
+// src/components/Header.jsx
 import React, { useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAdminStore } from '../context/AdminStore';
+import ManageUsersModal from './admin/ManageUsersModal';
 
-const Header = ({ onToggleSidebar }) => {
-  const { pathname } = useLocation();
+const Header = ({ onToggleSidebar, onOpenMaintLog }) => {
   const navigate = useNavigate();
-  const isAdminRoute = pathname === '/admin';
 
   const {
-    adminMode, setAdminMode,
+    adminMode,
+    toggleAdminMode,          // ⬅️ use the helper from the store
     currentUser,
     users, addUser, updateUser, deleteUser,
     logout,
-    productionLines,       // ✅ need this for machine list
-    toggleMachineAccess,   // ✅ grant/revoke machine access
+    productionLines,
+    toggleMachineAccess,
   } = useAdminStore();
 
-  const [showUserMgr, setShowUserMgr] = useState(false);
-  const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'operator' });
-
-  const createUser = () => {
-    if (!newUser.name || !newUser.email || !newUser.password) return;
-    addUser(newUser);
-    setNewUser({ name: '', email: '', password: '', role: 'operator' });
-  };
+  const [showManageUsers, setShowManageUsers] = useState(false);
+  const isAdmin = currentUser?.role === 'admin';
 
   const handleLogout = () => {
     logout();
     navigate('/login', { replace: true });
   };
 
-  const isAdmin = currentUser?.role === 'admin';
-
   return (
-    <header>
-      <button className="hamburger" aria-label="Toggle sidebar" onClick={onToggleSidebar}>
-        <i className="fas fa-bars" />
-      </button>
+    <>
+      <header>
+        <button className="hamburger" aria-label="Toggle sidebar" onClick={onToggleSidebar}>
+          <i className="fas fa-bars" />
+        </button>
 
-      <div className="logo">
-        <i className="fas fa-industry" />
-        <h1>AI Predictive Maintenance</h1>
-      </div>
+        <div className="logo">
+          <h1>PMS</h1>
+        </div>
 
-      <div className="user-info" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 10 }}>
-        
-        {/* Admin toggle */}
-        {isAdmin && (
-          <button
-            className="btn small"
-            style={{ marginRight: 8 }}
-            onClick={() => setAdminMode(!adminMode)}
-          >
-            {adminMode ? (
-              <>
-                <i className="fas fa-eye" /> View as User
-              </>
-            ) : (
-              <>
-                <i className="fas fa-user-shield" /> View as Admin
-              </>
-            )}
-          </button>
-        )}
+        <div className="user-info" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 10 }}>
+          {/* Admin toggle */}
+          {isAdmin && (
+            <button
+              className="btn small"
+              style={{ marginRight: 8 }}
+              onClick={toggleAdminMode}
+              aria-pressed={adminMode}
+              title={adminMode ? 'Switch to user view' : 'Switch to admin view'}
+            >
+              {adminMode ? (
+                <>
+                  <i className="fas fa-eye" /> View as User
+                </>
+              ) : (
+                <>
+                  <i className="fas fa-user-shield" /> View as Admin
+                </>
+              )}
+            </button>
+          )}
 
-        {/* Manage Users */}
-        {isAdmin && adminMode && (
-          <button className="btn small" onClick={() => setShowUserMgr(s => !s)}>
-            <i className="fas fa-users-cog" /> Manage Users
-          </button>
-        )}
+          {/* Maintenance Log (admin-only, only in admin mode) */}
+          {isAdmin && adminMode && (
+            <button
+              className="btn small"
+              onClick={() => onOpenMaintLog?.()}
+              title="Open Maintenance Log"
+              aria-label="Open Maintenance Log"
+            >
+              <i className="fas fa-clipboard-list" /> Maintenance Log
+            </button>
+          )}
 
-        <img src="https://xsgames.co/randomusers/avatar.php?g=male" alt="User" />
-        <div>{currentUser?.name || 'Guest'}</div>
+          {/* Manage Users (admin-only, only in admin mode) */}
+          {isAdmin && adminMode && (
+            <button className="btn small" onClick={() => setShowManageUsers(true)}>
+              <i className="fas fa-users-cog" /> Manage Users
+            </button>
+          )}
 
-        {/* Logout */}
-        {currentUser && (
-          <button className="btn small" onClick={handleLogout} style={{ marginLeft: 6 }}>
-            <i className="fas fa-sign-out-alt" /> Logout
-          </button>
-        )}
+          <img src="https://xsgames.co/randomusers/avatar.php?g=male" alt="User" />
+          <div>{currentUser?.name || 'Guest'}</div>
 
-        {/* User Manager Popover */}
-        {isAdmin && adminMode && showUserMgr && (
-          <div className="admin-popover" style={{ width: 360 }}>
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>Users & Access</div>
+          {/* Logout */}
+          {currentUser && (
+            <button className="btn small" onClick={handleLogout} style={{ marginLeft: 6 }}>
+              <i className="fas fa-sign-out-alt" /> Logout
+            </button>
+          )}
+        </div>
+      </header>
 
-            {/* Create New User */}
-            <div className="row" style={{ display:'grid', gap:6, marginBottom: 10 }}>
-              <input placeholder="Full name" value={newUser.name} onChange={e => setNewUser({ ...newUser, name: e.target.value })}/>
-              <input placeholder="Email" value={newUser.email} onChange={e => setNewUser({ ...newUser, email: e.target.value })}/>
-              <input placeholder="Password" value={newUser.password} onChange={e => setNewUser({ ...newUser, password: e.target.value })}/>
-              <select value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value })}>
-                <option value="operator">Operator</option>
-                <option value="viewer">Viewer</option>
-                <option value="admin">Admin</option>
-              </select>
-              <button className="btn primary small" onClick={createUser}>
-                <i className="fas fa-user-plus" /> Create
-              </button>
-            </div>
-
-            {/* Existing Users */}
-            <div style={{ maxHeight: 320, overflow: 'auto', display:'grid', gap:8 }}>
-              {users.map(u => (
-                <div
-                  key={u.id}
-                  style={{
-                    display:'grid',
-                    gap:6,
-                    padding:8,
-                    background:'rgba(52,152,219,0.08)',
-                    borderRadius:8
-                  }}
-                >
-                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                    <strong>{u.name}</strong>
-                    <button className="btn small" onClick={() => deleteUser(u.id)}>
-                      <i className="fas fa-trash" />
-                    </button>
-                  </div>
-                  <div style={{ fontSize:'.9rem', opacity:.85 }}>{u.email}</div>
-                  <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-                    <label style={{ fontSize:'.85rem' }}>Role</label>
-                    <select
-                      value={u.role}
-                      onChange={e => updateUser(u.id, { role: e.target.value })}
-                      style={{ flex:1 }}
-                    >
-                      <option value="operator">Operator</option>
-                      <option value="viewer">Viewer</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                    <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:'.85rem' }}>
-                      <input
-                        type="checkbox"
-                        checked={u.active !== false}
-                        onChange={e => updateUser(u.id, { active: e.target.checked })}
-                      />
-                      Active
-                    </label>
-                  </div>
-
-                  {/* ✅ Machine Access Buttons */}
-                  <div style={{ fontSize:'.85rem', marginTop:4 }}>
-                    <strong>Machine Access:</strong>
-                    <div style={{
-                      display:'flex',
-                      flexWrap:'wrap',
-                      gap:6,
-                      marginTop:4
-                    }}>
-                      {productionLines.flatMap(line =>
-                        line.machines.map(machine => {
-                          const hasAccess = (u.accessibleMachines || []).includes(machine.id);
-                          return (
-                            <button
-                              key={machine.id}
-                              className="btn small"
-                              style={{
-                                background: hasAccess ? 'var(--accent)' : 'var(--secondary)',
-                                opacity: hasAccess ? 1 : 0.6,
-                                fontSize: '.8rem',
-                              }}
-                              onClick={() => toggleMachineAccess(u.id, machine.id)}
-                            >
-                              {machine.name}
-                            </button>
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="row gap" style={{ marginTop: 8 }}>
-              <button className="btn small" onClick={() => setShowUserMgr(false)}>Close</button>
-            </div>
-          </div>
-        )}
-      </div>
-    </header>
+      {/* ===== Manage Users Modal ===== */}
+      {isAdmin && adminMode && showManageUsers && (
+        <ManageUsersModal
+          users={users}
+          lines={productionLines}
+          onClose={() => setShowManageUsers(false)}
+          onCreate={(payload) => addUser(payload)}
+          onUpdate={(id, patch) => updateUser(id, patch)}
+          onDelete={(id) => deleteUser(id)}
+          onToggleMachineAccess={(userId, machineId) => toggleMachineAccess(userId, machineId)}
+        />
+      )}
+    </>
   );
 };
 

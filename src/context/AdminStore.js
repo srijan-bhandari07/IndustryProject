@@ -3,12 +3,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 
 const AdminCtx = createContext(null);
 const load = (k, f) => {
-  try {
-    const v = localStorage.getItem(k);
-    return v ? JSON.parse(v) : f;
-  } catch {
-    return f;
-  }
+  try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : f; } catch { return f; }
 };
 const save = (k, v) => localStorage.setItem(k, JSON.stringify(v));
 
@@ -16,7 +11,7 @@ const save = (k, v) => localStorage.setItem(k, JSON.stringify(v));
 const DEFAULT_LINES = [
   {
     id: 1,
-    name: "Production Line A",
+    name: "Filling Machine A",
     machines: [
       { id: 1, name: "Filling Machine #A1", status: "warning" },
       { id: 2, name: "Capping Machine #A2", status: "normal" },
@@ -26,7 +21,7 @@ const DEFAULT_LINES = [
   },
   {
     id: 2,
-    name: "Production Line B",
+    name: "Filling Machine B",
     machines: [
       { id: 5, name: "Filling Machine #B1", status: "normal" },
       { id: 6, name: "Capping Machine #B2", status: "normal" },
@@ -44,25 +39,59 @@ const SEEDED_ADMIN = {
   password: "admin",
   role: "admin",
   active: true,
-  accessibleMachines: [], // admin has implicit access to all
+  accessibleMachines: [],
 };
+
+/* ---------- Seeded Maintenance Logs (optional demo data) ---------- */
+const DEFAULT_MAINT_LOGS = [
+  {
+    id: 1001,
+    date: "2025-09-15",
+    lineId: 1,
+    machineId: 1,
+    title: "Routine maintenance",
+    technician: "ABC",
+    status: "completed", // planned | in-progress | completed
+    notes: "Lubricated bearings. Checked belts."
+  },
+  {
+    id: 1002,
+    date: "2025-09-18",
+    lineId: 2,
+    machineId: 7,
+    title: "Calibration",
+    technician: "Srijan",
+    status: "planned",
+    notes: "Schedule vibration sensor calibration."
+  }
+];
 
 /* ---------- Provider ---------- */
 export function AdminProvider({ children }) {
-  const [adminMode, setAdminMode] = useState(load("admin.mode", false));
+  // Restore current user first so we can derive a safe initial adminMode
+  const [currentUser, setCurrentUser] = useState(load("auth.currentUser", null));
+
+  // Safe initial adminMode: only true if a restored admin was logged in previously
+  const [adminMode, setAdminMode] = useState(() => {
+    const restored = load("admin.mode", false);
+    const u = load("auth.currentUser", null);
+    return u?.role === "admin" ? !!restored : false;
+  });
+
   const [users, setUsers] = useState(load("admin.users", [SEEDED_ADMIN]));
   const [productionLines, setProductionLines] = useState(load("admin.lines", DEFAULT_LINES));
-  const [currentUser, setCurrentUser] = useState(load("auth.currentUser", null));
+
+  // NEW: persisted maintenance logs
+  const [maintenanceLogs, setMaintenanceLogs] = useState(
+    load("admin.maintLogs", DEFAULT_MAINT_LOGS)
+  );
 
   /* Ensure at least one admin exists */
   useEffect(() => {
     setUsers((prev) => {
       const hasAdmin = prev.some((u) => u.role === "admin" && u.active !== false);
       if (hasAdmin) return prev;
-
-      const exists = prev.some(
-        (u) => u.email.toLowerCase() === SEEDED_ADMIN.email.toLowerCase()
-      );
+      const exists = prev.some((u) => u.email.toLowerCase() === SEEDED_ADMIN.email.toLowerCase());
       return exists ? prev : [...prev, SEEDED_ADMIN];
     });
   }, []);
@@ -72,6 +101,7 @@ export function AdminProvider({ children }) {
   useEffect(() => save("admin.users", users), [users]);
   useEffect(() => save("admin.lines", productionLines), [productionLines]);
   useEffect(() => save("auth.currentUser", currentUser), [currentUser]);
+  useEffect(() => save("admin.maintLogs", maintenanceLogs), [maintenanceLogs]); // NEW
 
   /* ---------- Auth ---------- */
   const login = (email, password) => {
@@ -89,7 +119,7 @@ export function AdminProvider({ children }) {
       accessibleMachines: user.accessibleMachines || [],
     };
     setCurrentUser(authUser);
-    setAdminMode(user.role === "admin");
+    setAdminMode(user.role === "admin"); // admin logs in -> admin view on
     return { ok: true, user: authUser };
   };
 
@@ -115,41 +145,35 @@ export function AdminProvider({ children }) {
     return user;
   };
 
-  // ✅ Keeps currentUser synced when updating role, active state, etc.
+  // Keep currentUser in sync when the same user is edited
   const updateUser = (id, patch) => {
     setUsers((prev) => {
       const next = prev.map((u) => (u.id === id ? { ...u, ...patch } : u));
-      if (currentUser?.id === id) {
-        setCurrentUser((cu) => ({ ...cu, ...patch }));
-      }
+      if (currentUser?.id === id) setCurrentUser((cu) => ({ ...cu, ...patch }));
       return next;
     });
   };
 
   const deleteUser = (id) => {
     setUsers((prev) => prev.filter((u) => u.id !== id));
+    if (currentUser?.id === id) {
+      // if you delete the logged-in user, log them out
+      logout();
+    }
   };
 
-  // ✅ Syncs immediately with currentUser if you change their access
   const toggleMachineAccess = (userId, machineId) => {
     setUsers((prev) => {
       const next = prev.map((u) => {
         if (u.id !== userId) return u;
         const list = Array.isArray(u.accessibleMachines) ? [...u.accessibleMachines] : [];
-        const has = list.includes(machineId);
-        const updated = has ? list.filter((id) => id !== machineId) : [...list, machineId];
+        const updated = list.includes(machineId) ? list.filter((id) => id !== machineId) : [...list, machineId];
         return { ...u, accessibleMachines: updated };
       });
-
-      // Mirror to logged-in user if they are the one being edited
       if (currentUser?.id === userId) {
         const updatedUser = next.find((u) => u.id === userId);
-        setCurrentUser((cu) => ({
-          ...cu,
-          accessibleMachines: updatedUser?.accessibleMachines || [],
-        }));
+        setCurrentUser((cu) => ({ ...cu, accessibleMachines: updatedUser?.accessibleMachines || [] }));
       }
-
       return next;
     });
   };
@@ -157,53 +181,27 @@ export function AdminProvider({ children }) {
   /* ---------- Machines ---------- */
   const addMachine = (lineIndex, machine) => {
     setProductionLines((prev) => {
-      const copy = prev.map((l) => ({
-        ...l,
-        machines: l.machines.map((m) => ({ ...m })),
-      }));
+      const copy = prev.map((l) => ({ ...l, machines: l.machines.map((m) => ({ ...m })) }));
       const maxId = Math.max(0, ...copy.flatMap((l) => l.machines.map((m) => m.id)));
-      const newMachine = {
-        id: maxId + 1,
-        status: machine.status || "normal",
-        ...machine,
-      };
-      copy[lineIndex].machines.push(newMachine);
-
-      // New machine should be visible in Manage Users instantly
+      copy[lineIndex].machines.push({ id: maxId + 1, status: machine.status || "normal", ...machine });
+      // ensure arrays exist
       setUsers((prevUsers) =>
-        prevUsers.map((u) => ({
-          ...u,
-          accessibleMachines: Array.isArray(u.accessibleMachines)
-            ? u.accessibleMachines
-            : [],
-        }))
+        prevUsers.map((u) => ({ ...u, accessibleMachines: Array.isArray(u.accessibleMachines) ? u.accessibleMachines : [] }))
       );
-
       return copy;
     });
   };
 
-  // ✅ Removes machine & scrubs from user access lists
   const deleteMachine = (lineIndex, machineId) => {
     setProductionLines((prev) => {
-      const copy = prev.map((l) => ({
-        ...l,
-        machines: l.machines.map((m) => ({ ...m })),
-      }));
+      const copy = prev.map((l) => ({ ...l, machines: l.machines.map((m) => ({ ...m })) }));
       copy[lineIndex].machines = copy[lineIndex].machines.filter((m) => m.id !== machineId);
       return copy;
     });
-
     setUsers((prev) => {
-      const next = prev.map((u) => ({
-        ...u,
-        accessibleMachines: (u.accessibleMachines || []).filter((id) => id !== machineId),
-      }));
+      const next = prev.map((u) => ({ ...u, accessibleMachines: (u.accessibleMachines || []).filter((id) => id !== machineId) }));
       if (currentUser) {
-        setCurrentUser((cu) => ({
-          ...cu,
-          accessibleMachines: (cu.accessibleMachines || []).filter((id) => id !== machineId),
-        }));
+        setCurrentUser((cu) => ({ ...cu, accessibleMachines: (cu.accessibleMachines || []).filter((id) => id !== machineId) }));
       }
       return next;
     });
@@ -211,45 +209,54 @@ export function AdminProvider({ children }) {
 
   const setMachineStatus = (lineIndex, machineId, status) => {
     setProductionLines((prev) => {
-      const copy = prev.map((l) => ({
-        ...l,
-        machines: l.machines.map((m) => ({ ...m })),
-      }));
-      copy[lineIndex].machines = copy[lineIndex].machines.map((m) =>
-        m.id === machineId ? { ...m, status } : m
-      );
+      const copy = prev.map((l) => ({ ...l, machines: l.machines.map((m) => ({ ...m })) }));
+      copy[lineIndex].machines = copy[lineIndex].machines.map((m) => (m.id === machineId ? { ...m, status } : m));
       return copy;
     });
   };
 
   const toggleMachineStatus = (lineIndex, machineId) => {
     setProductionLines((prev) => {
-      const copy = prev.map((l) => ({
-        ...l,
-        machines: l.machines.map((m) => ({ ...m })),
-      }));
+      const copy = prev.map((l) => ({ ...l, machines: l.machines.map((m) => ({ ...m })) }));
       copy[lineIndex].machines = copy[lineIndex].machines.map((m) => {
         if (m.id !== machineId) return m;
-        const next =
-          m.status === "non-operational"
-            ? "normal"
-            : m.status === "warning"
-            ? "non-operational"
-            : "non-operational";
+        const next = m.status === "non-operational" ? "normal" : m.status === "warning" ? "non-operational" : "non-operational";
         return { ...m, status: next };
       });
       return copy;
     });
   };
 
-  /* ---------- Keep adminMode in sync ---------- */
+  /* ---------- Maintenance Logs (CRUD) ---------- */
+  const addMaintenanceLog = (log) => {
+    const id = Date.now();
+    const payload = { id, status: "planned", ...log };
+    setMaintenanceLogs((prev) => [payload, ...prev]);
+    return payload;
+  };
+
+  const updateMaintenanceLog = (id, patch) => {
+    setMaintenanceLogs((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+  };
+
+  const deleteMaintenanceLog = (id) => {
+    setMaintenanceLogs((prev) => prev.filter((l) => l.id !== id));
+  };
+
+  /* ---------- Keep adminMode in sync with current user ---------- */
   useEffect(() => {
     if (!currentUser) {
       setAdminMode(false);
-    } else if (currentUser.role !== "admin" && adminMode) {
-      setAdminMode(false);
+      return;
     }
+    if (currentUser.role !== "admin" && adminMode) setAdminMode(false);
   }, [currentUser, adminMode]);
+
+  /* ---------- Optional helper for the header toggle ---------- */
+  const toggleAdminMode = () => {
+    if (currentUser?.role !== "admin") return setAdminMode(false);
+    setAdminMode((v) => !v);
+  };
 
   /* ---------- Expose store ---------- */
   const value = useMemo(
@@ -260,19 +267,34 @@ export function AdminProvider({ children }) {
       logout,
       adminMode,
       setAdminMode,
+      toggleAdminMode,
+
       users,
       addUser,
       updateUser,
       deleteUser,
       toggleMachineAccess,
+
       productionLines,
       setProductionLines,
       addMachine,
       deleteMachine,
       setMachineStatus,
       toggleMachineStatus,
+
+      // NEW: maintenance log API
+      maintenanceLogs,
+      addMaintenanceLog,
+      updateMaintenanceLog,
+      deleteMaintenanceLog,
     }),
-    [currentUser, adminMode, users, productionLines]
+    [
+      currentUser,
+      adminMode,
+      users,
+      productionLines,
+      maintenanceLogs, // include in memo deps
+    ]
   );
 
   return <AdminCtx.Provider value={value}>{children}</AdminCtx.Provider>;

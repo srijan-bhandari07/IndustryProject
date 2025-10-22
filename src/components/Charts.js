@@ -25,8 +25,18 @@ ChartJS.register(
 );
 
 const Charts = ({ temperatureData, vibrationData }) => {
+  // ✅ Generate dynamic time labels if available
+  const tempLabels =
+    Array.isArray(temperatureData) && temperatureData.length
+      ? temperatureData.map((_, i) => {
+          const now = new Date();
+          now.setMinutes(now.getMinutes() - (temperatureData.length - i - 1) * 5);
+          return now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        })
+      : ['10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00'];
+
   const tempChartData = {
-    labels: ['10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00'],
+    labels: tempLabels,
     datasets: [
       {
         label: 'Temperature (°C)',
@@ -50,8 +60,20 @@ const Charts = ({ temperatureData, vibrationData }) => {
     scales: {
       y: {
         beginAtZero: false,
-        min: 70,
-        max: 75,
+        min: Math.min(...temperatureData) - 1 || 70,
+        max: Math.max(...temperatureData) + 1 || 75,
+        title: {
+          display: true,
+          text: 'Temperature (°C)',
+          color: '#bcd0ff',
+        },
+      },
+      x: {
+        title: {
+          display: true,
+          text: 'Time',
+          color: '#bcd0ff',
+        },
       },
     },
   };
@@ -83,6 +105,11 @@ const Charts = ({ temperatureData, vibrationData }) => {
       y: {
         beginAtZero: true,
         max: 5,
+        title: {
+          display: true,
+          text: 'Vibration (mm/s)',
+          color: '#bcd0ff',
+        },
       },
     },
   };
