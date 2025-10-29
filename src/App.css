@@ -1032,3 +1032,62 @@ body.admin-mode header {
 @media (max-width: 980px) {
   .kpi-row { grid-template-columns: 1fr; }
 }
+
+/* Threshold bar */
+.thbar {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.thbar-track {
+  position: relative;
+  height: 10px;
+  border-radius: 5px;
+  background: #0f172a; /* darker base */
+  overflow: hidden;
+}
+
+/* 3-zone gradient: darker green → darker yellow → darker red */
+.thbar-track::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to right,
+    #4ade80 0%,    /* darker green */
+    #eab308 50%,   /* darker yellow */
+    #f87171 100%   /* darker red */
+  );
+  opacity: 0.6;
+}
+
+/* Fill pointer */
+.thbar-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: rgba(255,255,255,0.3); /* darker fill */
+  border-radius: 5px;
+  transition: width 0.25s ease-out;
+}
+
+/* ===== Label ===== */
+.thbar-legend {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  transition: color 0.3s ease;
+}
+
+/* Color logic (apply via JS based on severity) - darker shades */
+.thbar-legend.normal  { color: #4ade80; } /* darker green */
+.thbar-legend.warning { color: #eab308; } /* darker yellow */
+.thbar-legend.critical{ color: #f87171; } /* darker red */
+
+/* Slightly dim ends, keep middle label vivid */
+.thbar-legend span:first-child,
+.thbar-legend span:last-child {
+  opacity: 0.8;
+}

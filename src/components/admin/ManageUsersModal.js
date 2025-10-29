@@ -57,7 +57,7 @@ export default function ManageUsersModal({
       email: form.email.trim(),
       role: form.role,
       active: form.active,
-      password: form.password, // <-- use entered password
+      password: form.password, 
     };
     onCreate?.(payload);
 

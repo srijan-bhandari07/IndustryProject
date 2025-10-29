@@ -20,7 +20,7 @@ const Sidebar = ({
     maintenanceLogs,               
   } = useAdminStore();
 
-  const [newNames, setNewNames] = useState({}); // { [lineIndex]: 'New machine name' }
+  const [newNames, setNewNames] = useState({}); 
 
   const getStatusIcon = (status) => {
     switch (status) {

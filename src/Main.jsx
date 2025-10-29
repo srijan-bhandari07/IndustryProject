@@ -7,7 +7,7 @@ import { AdminProvider, useAdminStore } from './context/AdminStore';
 
 function AdminPage() {
   const { setAdminMode } = useAdminStore();
-  React.useEffect(() => { setAdminMode(true); }, [setAdminMode]); // force admin tools on
+  React.useEffect(() => { setAdminMode(true); }, [setAdminMode]); 
   return <App />; // same dashboard UI
 }
 

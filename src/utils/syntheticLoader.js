@@ -102,7 +102,7 @@ export function rowToTelemetry(row) {
       temperature: prodTemp ?? 72.4,
       vibration: vibration ?? 4.2,
       pressure: pressure ?? 3.5,
-      voltage: 415,
+     
     },
     drivers: {
       co2Content: co2,

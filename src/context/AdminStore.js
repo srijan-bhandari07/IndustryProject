@@ -293,7 +293,7 @@ export function AdminProvider({ children }) {
       adminMode,
       users,
       productionLines,
-      maintenanceLogs, // include in memo deps
+      maintenanceLogs, 
     ]
   );
 

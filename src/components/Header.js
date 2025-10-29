@@ -9,7 +9,7 @@ const Header = ({ onToggleSidebar, onOpenMaintLog }) => {
 
   const {
     adminMode,
-    toggleAdminMode,          // ⬅️ use the helper from the store
+    toggleAdminMode,          
     currentUser,
     users, addUser, updateUser, deleteUser,
     logout,

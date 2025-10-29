@@ -66,11 +66,11 @@ function App() {
     temperature: 72.4,
     vibration: 4.2,
     pressure: 3.5,
-    voltage: 415,
+   
   });
   const [alerts, setAlerts] = useState([
     { id: 1, message: 'High vibration detected on Machine #1. Please inspect.', severity: 'warning', timestamp: '2025-09-10 14:32' },
-    { id: 2, message: 'Voltage fluctuation detected at 14:32. System stabilized.', severity: 'info', timestamp: '2025-09-10 14:30' },
+
     { id: 3, message: 'Preventive maintenance scheduled for Machine #2 in 3 days.', severity: 'info', timestamp: '2025-09-10 13:45' },
   ]);
   const [temperatureData, setTemperatureData] = useState([71.2, 72.5, 73.1, 72.8, 72.4, 72.9, 73.5]);
@@ -114,7 +114,7 @@ function App() {
   // ===== Fallback data =====
   const loadFallbackData = useCallback(() => {
     const fallbackData = {
-      machineData: { temperature: 72.4, vibration: 4.2, pressure: 3.5, voltage: 415 },
+      machineData: { temperature: 72.4, vibration: 4.2, pressure: 3.5 },
       drivers: {
         co2Content: 3.1,
         oxygenContent: 0.8,

@@ -4,25 +4,25 @@
 export const THRESHOLDS = {
   // ===== FILLING =====
   tankPressure:   { normal:[2.0,3.0],  warning:[1.0,2.0,3.0,4.5],  critical:[0,1.0,4.5,6.0] },
-  tankLevel:      { normal:[28,32],    warning:[10,28,32,50],     critical:[0,10,50,100] },
-  productTemp:    { normal:[0.5,4.0],  warning:[0.5,4.0,4.0,8.0], critical:[0,0.5,8.0,Infinity] },
-  fillLevel:      { normal:[328,332],  warning:[320,328,332,340], critical:[0,320,340,400] },
-  snift1Throttle: { normal:[40,87],    warning:[30,40,87,90],     critical:[0,30,90,100] },
-  snift1Time:     { normal:[1.0,1.5],  warning:[0.5,1.0,1.5,2.0], critical:[0,0.5,2.0,3.0] },
-  snift2Throttle: { normal:[5,15],     warning:[3,5,15,18],       critical:[0,3,18,25] },
-  snift2Time:     { normal:[0.5,1.5],  warning:[0.3,0.5,1.5,2.0], critical:[0,0.3,2.0,3.0] },
-  cycleRate:      { normal:[200,250],  warning:[150,200,250,280], critical:[0,150,280,400] },
+  tankLevel:      { normal:[28,32],    warning:[10,28,32,50],      critical:[0,10,50,100] },
+  productTemp:    { normal:[0.5,4.0],  warning:[0.5,4.0,4.0,8.0],  critical:[0,0.5,8.0,Infinity] },
+  fillLevel:      { normal:[328,332],  warning:[320,328,332,340],  critical:[0,320,340,400] },
+  snift1Throttle: { normal:[40,87],    warning:[30,40,87,90],      critical:[0,30,90,100] },
+  snift1Time:     { normal:[1.0,1.5],  warning:[0.5,1.0,1.5,2.0],  critical:[0,0.5,2.0,3.0] },
+  snift2Throttle: { normal:[5,15],     warning:[3,5,15,18],        critical:[0,3,18,25] },
+  snift2Time:     { normal:[0.5,1.5],  warning:[0.3,0.5,1.5,2.0],  critical:[0,0.3,2.0,3.0] },
+  cycleRate:      { normal:[200,250],  warning:[150,200,250,280],  critical:[0,150,280,400] },
 
   // ===== SEAMING =====
-  vibration:      { normal:[0.5,2.5],  warning:[0.5,2.5,2.5,6.0], critical:[0,0.5,6.0,10.0] },
-  sealingForce:   { normal:[80,100],   warning:[80,100,100,120],  critical:[0,80,120,200] },
-  seamingSpeed:   { normal:[200,250],  warning:[150,200,250,280], critical:[0,150,280,350] },
-  seamIntegrity:  { normal:[95,100],   warning:[80,95,100,104],   critical:[0,80,104,120] },
+  vibration:      { normal:[0.5,2.5],  warning:[0.5,2.5,2.5,6.0],  critical:[0,0.5,6.0,10.0] },
+  sealingForce:   { normal:[80,100],   warning:[80,100,100,120],   critical:[0,80,120,200] },
+  seamingSpeed:   { normal:[200,250],  warning:[150,200,250,280],  critical:[0,150,280,350] },
+  seamIntegrity:  { normal:[95,100],   warning:[80,95,100,104],    critical:[0,80,104,120] },
 
   // ===== QA =====
-  oxygenContent:  { normal:[0.1,0.8],  warning:[0.1,0.8,0.8,3.0], critical:[0,0.1,3.0,Infinity] },
-  co2Content:     { normal:[4.0,6.0],  warning:[2.0,4.0,6.0,8.0], critical:[0,2.0,8.0,Infinity] },
-  seamThickness:  { normal:[1.1,1.3],  warning:[1.1,1.3,1.3,1.6], critical:[0,1.1,1.6,Infinity] },
+  oxygenContent:  { normal:[0.1,0.8],  warning:[0.1,0.8,0.8,3.0],  critical:[0,0.1,3.0,Infinity] },
+  co2Content:     { normal:[4.0,6.0],  warning:[2.0,4.0,6.0,8.0],  critical:[0,2.0,8.0,Infinity] },
+  seamThickness:  { normal:[1.1,1.3],  warning:[1.1,1.3,1.3,1.6],  critical:[0,1.1,1.6,Infinity] },
 };
 
 // Pretty names / units / groups shown in the UI modal
@@ -51,17 +51,21 @@ export function getFeatureMeta(feature) {
   return META[feature] || { label: feature, unit: '', group: 'Process' };
 }
 
+// ✅ Fixed severity logic (works with your threshold layout)
 export function getSeverity(feature, value) {
   const t = THRESHOLDS[feature];
   if (!t || value == null) return 'info';
   const v = +value;
 
-  // critical if <crit.low or >crit.high
-  if (v < t.critical[1] || v > t.critical[2]) return 'critical';
-  // warning if <warn.low or >warn.high
-  if (v < t.warning[1] || v > t.warning[2]) return 'warning';
-  // normal band
-  if (v >= t.normal[0] && v <= t.normal[1]) return 'normal';
+  const [nLow, nHigh] = t.normal;
+  const [, cLow, cHigh] = t.critical;
+
+  // Outside critical range → critical
+  if (v < cLow || v > cHigh) return 'critical';
+  // Inside normal range → normal
+  if (v >= nLow && v <= nHigh) return 'normal';
+  // Between normal and critical → warning
+  if ((v > cLow && v < nLow) || (v > nHigh && v < cHigh)) return 'warning';
   return 'info';
 }
 
@@ -78,5 +82,9 @@ export function describeThreshold(feature) {
 // Helper used by cards/badges to pick a color class
 export function getColorClass(feature, value) {
   const sev = getSeverity(feature, value);
-  return sev === 'critical' ? 'critical' : sev === 'warning' ? 'warning' : 'normal';
+  return sev === 'critical'
+    ? 'critical'
+    : sev === 'warning'
+    ? 'warning'
+    : 'normal';
 }

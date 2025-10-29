@@ -1,45 +1,49 @@
+// src/components/admin/AdminQualityCards.jsx
 import React from "react";
+import ThresholdBar from "../ThresholdBar"; // ⬅️ add this
 
 /**
  * Dashboard KPI cards:
- * - "Quality Status" (badge + driver summary)
+ * - "Quality Status" (badge + driver summary + mini threshold bars with labels)
  * - "Defect Rate" (big % + trend + signals summary)
  */
 export default function AdminQualityCards({
   qualityStatus = "Normal",
   defectRate = 0,
-  trend = 0, // percentage points vs last (e.g. +0.20)
+  trend = 0,
   drivers = {},
   onOpenQuality,
   onOpenDefects,
 }) {
   const fmt = {
-    pct: (v, d = 2) =>
-      (Number.isFinite(+v) ? (+v).toFixed(d) : "—") + " %",
+    pct: (v, d = 2) => (Number.isFinite(+v) ? (+v).toFixed(d) : "—") + " %",
     num: (v, d = 1) => (Number.isFinite(+v) ? (+v).toFixed(d) : "—"),
   };
 
-  // Build the “Drivers:” line (like your screenshot)
   const driversLine = [
     drivers.seamIntegrity != null && `Seam Int: ${fmt.pct(drivers.seamIntegrity, 1)}`,
     drivers.oxygenContent != null && `O₂: ${fmt.pct(drivers.oxygenContent, 2)}`,
     drivers.co2Content != null && `CO₂: ${fmt.pct(drivers.co2Content, 2)}`,
     drivers.seamThickness != null && `Seam Thk: ${fmt.num(drivers.seamThickness, 2)} mm`,
     drivers.sealingForce != null && `Seal F: ${fmt.num(drivers.sealingForce, 0)} N`,
-  ].filter(Boolean).join(" • ");
+  ]
+    .filter(Boolean)
+    .join(" • ");
 
-  // Build the “Signals:” line on the Defect card
   const signalsLine = [
     drivers.vibration != null && `Vibration: ${fmt.num(drivers.vibration, 1)} mm/s`,
     drivers.fillLevel != null && `Fill: ${fmt.num(drivers.fillLevel, 0)} ml`,
     drivers.sealingForce != null && `Seal F: ${fmt.num(drivers.sealingForce, 0)} N`,
-  ].filter(Boolean).join(" • ");
+  ]
+    .filter(Boolean)
+    .join(" • ");
 
-  const badgeTone = qualityStatus.toLowerCase() === "warning"
-    ? "warning"
-    : qualityStatus.toLowerCase() === "poor"
-    ? "danger"
-    : "ok";
+  const badgeTone =
+    qualityStatus.toLowerCase() === "warning"
+      ? "warning"
+      : qualityStatus.toLowerCase() === "poor"
+      ? "danger"
+      : "ok";
 
   const Trend = () => {
     const color =
@@ -51,6 +55,20 @@ export default function AdminQualityCards({
       </span>
     );
   };
+
+  // Small row with a label + a ThresholdBar (with labels turned on)
+  const Mini = ({ label, feature, value, unit = "" }) => (
+    <div className="mini-th">
+      <div className="mini-th-row">
+        <span className="mini-th-label">{label}</span>
+        <span className="mini-th-val">
+          {value == null ? "—" : `${Number(value).toFixed(2)}${unit}`}
+        </span>
+      </div>
+      {/* 🔧 FIXED: Changed featureKey to feature */}
+      <ThresholdBar feature={feature} value={value} showLabels />
+    </div>
+  );
 
   return (
     <div className="kpi-row">
@@ -75,6 +93,14 @@ export default function AdminQualityCards({
               <strong>Drivers:</strong>&nbsp;{driversLine}
             </div>
           )}
+
+          {/* 🔧 Compact threshold bars with labels */}
+          <div className="mini-th-grid">
+            <Mini label="CO₂" feature="co2Content" value={drivers.co2Content} unit="%" />
+            <Mini label="O₂" feature="oxygenContent" value={drivers.oxygenContent} unit="%" />
+            <Mini label="Vibration" feature="vibration" value={drivers.vibration} unit=" mm/s" />
+            <Mini label="Pressure" feature="tankPressure" value={drivers.pressure ?? drivers.tankPressure} unit=" bar" />
+          </div>
         </div>
       </article>
 
